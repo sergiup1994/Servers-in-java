@@ -1,0 +1,341 @@
+/*
+ * Assignment Concurrent Programming Assignment8_2016
+ *
+ * Student name:Sergiu Popusoi
+ * Student number:2861829
+ *
+ */
+ /* Please put your code for the servers and client ticket generators in the 
+    relevant sections of this text file
+*/
+
+// Server A =================================================================
+
+import java.io.*;
+import java.net.*;
+import java.util.ArrayList;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+public class serverA {
+	final static int portA = 1245;
+	final static int porttB = 2000;
+	static Boolean bool = true;
+	public static void main(String[] args) {
+		System.out.println("Server running...");
+		dataStore dataStore = new dataStore();
+		Buffer<String> buffer = new Buffer<String>(5);
+		try {
+			ServerSocket servesock = new ServerSocket(portA);
+            while (true) {
+                Socket socket = servesock.accept();
+                new Thread(new uploader(socket,buffer,dataStore)).start();
+            }
+        } catch (IOException e){e.printStackTrace();}
+
+    }
+}
+class dataStore{
+	ArrayList<String> data = new ArrayList<String>();
+	dataStore(){}
+	public void addTo(String d){
+		data.add(d);
+	}
+}
+class uploader implements Runnable {
+    Socket socket;
+    dataStore data;
+    Buffer<String> buffer;
+    uploader(Socket s,Buffer<String> b,dataStore d) {
+        socket = s; buffer=b; data = d;
+    }
+
+	public void run() {
+        try {
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+            while(in.readBoolean()){  
+            	String tickData = in.readUTF();
+            	System.out.println(tickData);
+            	//data.addTo(tickData);
+            	//buffer.put(tickData);
+            }
+        } catch (IOException e) {}
+    }
+}
+class Writer implements Runnable{
+	final static int portB = 2001;
+	Buffer<String> buffer;
+	Writer(Buffer<String> b){buffer=b;}
+	public void run(){
+		try{
+			Socket socket = new Socket(InetAddress.getLocalHost(),portB);
+	    	DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+	    	out.writeBoolean(true);
+	    	out.writeUTF(buffer.get());
+		}catch(IOException e){}
+	}
+}
+class Retriever implements Runnable{
+	dataStore data; Socket socket;
+	Retriever(dataStore d, Socket s){ data=d;socket=s;}
+	public void run(){
+		try{
+			DataInputStream in = new DataInputStream(socket.getInputStream());
+			data.addTo("copy-"+in.readUTF());
+		}catch(Exception e){}
+	}
+}
+class Buffer<E>{
+	private int max;
+	private int size = 0;
+	private ArrayList<E> buffer;
+	private Semaphore empty;
+	private Semaphore full;
+	private Lock lock = new ReentrantLock();
+	public Buffer(int s){
+		buffer = new ArrayList<E>();
+		max = s;
+		empty = new Semaphore(0);
+		full = new Semaphore(max);
+	}
+	public void put(E x){
+		try{
+			full.acquire();
+		}catch(InterruptedException e){}
+		// synchronise update of buffer
+		lock.lock();
+		try{
+			buffer.add(x);
+			size++;
+			empty.release();
+		}finally{
+			lock.unlock();
+		}
+	}
+	public E get(){
+		try{
+			empty.acquire();
+		}catch(InterruptedException e){}
+			// synchronise update of buffer
+			lock.lock();
+			try{
+			E temp = buffer.get(0);
+			buffer.remove(0);
+			size--;
+			full.release();
+			return temp;
+		}finally{
+			lock.unlock();
+		}
+	}
+}
+//End Server A ==============================================================
+
+// Server B =================================================================
+package main;
+import java.io.*;
+import java.net.*;
+import java.util.ArrayList;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+public class serverB {
+	final static int portA = 1246;
+	final static int porttA = 2001;
+	static Boolean bool = true;
+	public static void main(String[] args) {
+		System.out.println("Server running...");
+		dataStore dataStore = new dataStore();
+		Buffer<String> buffer = new Buffer<String>(5);
+		try {
+			ServerSocket servesock = new ServerSocket(portA);
+            while (true) {
+                Socket socket = servesock.accept();
+                new Thread(new uploader(socket,buffer,dataStore)).start();
+            }
+        } catch (IOException e){e.printStackTrace();}
+
+    }
+}
+class dataStore2{
+	ArrayList<String> data = new ArrayList<String>();
+	dataStore2(){}
+	public void addTo(String d){
+		data.add(d);
+	}
+}
+
+class uploader2 implements Runnable {
+    Socket socket;
+    dataStore data;
+    Buffer<String> buffer;
+    uploader2(Socket s,Buffer<String> b,dataStore d) {
+        socket = s; buffer=b; data = d;
+    }
+
+	public void run() {
+        try {
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+            while(in.readBoolean()){  
+            	String tickData = in.readUTF();
+            	System.out.println(tickData);
+            	data.addTo(tickData);
+            	buffer.put(tickData);
+            }
+        } catch (IOException e) {}
+    }
+}
+
+class Writer2 implements Runnable{
+	final static int portA = 2001;
+	Buffer<String> buffer;
+	Writer2(Buffer<String> b){buffer=b;}
+	public void run(){
+		try{
+			Socket socket = new Socket(InetAddress.getLocalHost(),portA);
+	    	DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+	    	out.writeBoolean(true);
+	    	out.writeUTF(buffer.get());
+		}catch(IOException e){}
+	}
+}
+class Retriever2 implements Runnable{
+	dataStore data; Socket socket;
+	Retriever2(dataStore d, Socket s){ data=d;socket=s;}
+	public void run(){
+		try{
+			DataInputStream in = new DataInputStream(socket.getInputStream());
+			data.addTo("copy-"+in.readUTF());
+		}catch(Exception e){}
+	}
+}
+
+class Buffer2<E>{
+	private int max;
+	private int size = 0;
+	private ArrayList<E> buffer;
+	private Semaphore empty;
+	private Semaphore full;
+	private Lock lock = new ReentrantLock();
+	
+	public Buffer2(int s){
+		buffer = new ArrayList<E>();
+		max = s;
+		empty = new Semaphore(0);
+		full = new Semaphore(max);
+	}
+	public void put(E x){
+		try{
+			full.acquire();
+		}catch(InterruptedException e){}
+		// synchronise update of buffer
+		lock.lock();
+		try{
+			buffer.add(x);
+			size++;
+			empty.release();
+		}finally{
+			lock.unlock();
+		}
+	}
+	public E get(){
+		try{
+			empty.acquire();
+		}catch(InterruptedException e){}
+			// synchronise update of buffer
+			lock.lock();
+			try{
+			E temp = buffer.get(0);
+			buffer.remove(0);
+			size--;
+			full.release();
+			return temp;
+		}finally{
+			lock.unlock();
+		}
+	}
+}
+
+//End Server B ==============================================================
+
+// Ticket Generator Clients =================================================
+package main;
+
+import java.util.Random;
+
+public class ticketgenerator {
+	private String ticket;
+	public ticketgenerator(){}
+	public void generateTicket(){
+		Random random = new Random();
+
+		String numbers="";
+	    for(int i=0;i<6;i++){
+	        int n = (int)(Math.random()*40);
+	        numbers += String.valueOf(n);
+	    }
+	    String storeCode="";
+	    for(int i=0;i<3;i++){
+	        int c = (int)(Math.random()*5);
+	        storeCode += String.valueOf(c);
+	    }
+	    ticket = storeCode+numbers;
+	}
+	
+	public String getTicketno(){
+		return ticket;
+	}	
+}
+package main;
+
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.Socket;
+
+public class GeneratorA {
+    final static int portA = 1245; 
+	public static void main(String[] args) {
+		try {
+            Socket socket = new Socket(InetAddress.getLocalHost(),portA);
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            for(int j=0;j<10;j++){
+            	ticketgenerator t = new ticketgenerator();
+            	t.generateTicket();
+            	String ticketgenerator = t.getTicketno();
+            	out.writeBoolean(true);
+            	out.writeUTF(ticketgenerator);
+            }
+		} catch (IOException e){System.out.println(e);}
+	}
+}
+	
+package main;
+
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.Socket;
+
+public class GeneratorB {
+    final static int portB = 1246; 
+	public static void main(String[] args) {
+		try {
+            Socket socket = new Socket(InetAddress.getLocalHost(),portB);
+            //DataInputStream in = new DataInputStream(socket.getInputStream());
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            for(int j=0;j<10;j++){
+            	ticketgenerator t = new ticketgenerator();
+            	t.generateTicket();
+            	String ticketgenerator = t.getTicketno();
+            	out.writeBoolean(true);
+            	out.writeUTF(ticketgenerator);
+            }
+		} catch (IOException e){System.out.println(e);}
+	}
+}
+//End Ticket Generator Clients ==============================================
+ 
+ 
